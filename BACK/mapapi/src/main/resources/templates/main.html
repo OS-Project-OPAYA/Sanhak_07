@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route Finder</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script
+        src="https://apis.openapi.sk.com/tmap/js?version=1.0&format=javascript&appKey=EHDhTt6iqk7HwqS2AirSY71g65xVG8Rp3LtZaIIx"></script>
+    <style>
+        .poi-list {
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            display: none;
+            /* 초기에는 숨김 */
+        }
+
+        .poi-item {
+            padding: 8px;
+            cursor: pointer;
+        }
+
+        .poi-item:hover {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Route Finder</h1>
+
+    <div class="search-container">
+        <input type="text" id="startLocation" placeholder="출발지 검색">
+        <button id="startSearch">검색</button>
+        <div id="startPoiList" class="poi-list"></div>
+    </div>
+
+    <div class="search-container">
+        <input type="text" id="endLocation" placeholder="목적지 검색">
+        <button id="endSearch">검색</button>
+        <div id="endPoiList" class="poi-list"></div>
+    </div>
+
+    <div id="map_div" style="width: 100%; height: 500px;"></div>
+
+    <button id="findRoute">경로 찾기</button>
+
+    <script>
+        let startCoordinates = null;
+        let endCoordinates = null;
+        let map;
+        let startMarker = null;
+        let endMarker = null;
+
+        $(document).ready(function () {
+            // 지도 초기화
+            function initializeMap() {
+                map = new Tmap.Map({
+                    div: 'map_div',
+                    width: '100%',
+                    height: '500px',
+                });
+                map.setCenter(new Tmap.LonLat(126.9783882, 37.5666103).transform("EPSG:4326", "EPSG:3857"), 15);
+            }
+
+            initializeMap();
+
+            // POI 검색 - 출발지
+            $("#startSearch").click(function () {
+                const keyword = $("#startLocation").val();
+                if (!keyword) return;
+                $.get(`/api/pois?keyword=${keyword}`, function (data) {
+                    $("#startPoiList").empty();
+                    data.forEach(function (poi) {
+                        $("#startPoiList").append(`<div class="poi-item" data-lat="${poi.frontLat}" data-lon="${poi.frontLon}">${poi.name}</div>`);
+                    });
+                    $("#startPoiList").show(); // 검색 결과 보여줌
+                });
+            });
+
+            // POI 검색 - 목적지
+            $("#endSearch").click(function () {
+                const keyword = $("#endLocation").val();
+                if (!keyword) return;
+                $.get(`/api/pois?keyword=${keyword}`, function (data) {
+                    $("#endPoiList").empty();
+                    data.forEach(function (poi) {
+                        $("#endPoiList").append(`<div class="poi-item" data-lat="${poi.frontLat}" data-lon="${poi.frontLon}">${poi.name}</div>`);
+                    });
+                    $("#endPoiList").show(); // 검색 결과 보여줌
+                });
+            });
+
+            // 출발지 선택
+            $(document).on('click', '#startPoiList .poi-item', function () {
+                const lat = $(this).data('lat');
+                const lon = $(this).data('lon');
+                startCoordinates = { lat, lon };
+
+                // 이전에 선택한 마커가 있으면 지도에서 제거
+                if (startMarker) {
+                    map.removeLayer(startMarker);
+                }
+
+                // 새로 선택한 위치에 마커 추가
+                startMarker = addMarker(lat, lon);
+
+                // 선택한 장소 이름을 입력 필드에 표시
+                $("#startLocation").val($(this).text());
+
+                // 선택한 후에도 검색 목록을 숨기지 않고 유지하여 다시 선택 가능
+                $("#startPoiList").empty();
+            });
+
+            // 새로운 검색어로 다시 검색할 수 있도록 검색 입력 필드에서 입력 이벤트 처리
+            $('#startLocation').on('input', function () {
+                const searchText = $(this).val();
+
+                // 검색 텍스트가 변경될 때마다 새로운 검색 결과를 요청
+                if (searchText.length > 0) {
+                    searchPoi(searchText, 'start'); // 새로운 검색 결과를 가져오는 함수 호출 (구현 필요)
+                } else {
+                    // 검색어가 없을 경우 리스트 초기화
+                    $("#startPoiList").empty();
+                }
+            });
+
+            // 목적지 선택
+            $(document).on('click', '#endPoiList .poi-item', function () {
+                const lat = $(this).data('lat');
+                const lon = $(this).data('lon');
+                endCoordinates = { lat, lon };
+
+                if (endMarker) {
+                    map.removeLayer(endMarker);
+                }
+                endMarker = addMarker(lat, lon);
+                $("#endLocation").val($(this).text());
+                // $("#endPoiList").empty(); // 선택 후 리스트 숨김을 제거
+            });
+
+            // 경로 찾기 버튼 클릭
+            $("#findRoute").click(function () {
+                if (startCoordinates && endCoordinates) {
+                    $.post("/api/route", JSON.stringify({
+                        startX: startCoordinates.lon,
+                        startY: startCoordinates.lat,
+                        endX: endCoordinates.lon,
+                        endY: endCoordinates.lat
+                    }), function (routeData) {
+                        drawRoute(routeData);
+                    });
+                } else {
+                    alert("출발지와 목적지를 선택해주세요.");
+                }
+            });
+
+            // 마커 추가 함수
+            function addMarker(lat, lon) {
+                const marker = new Tmap.Marker({
+                    position: new Tmap.LonLat(lon, lat).transform("EPSG:4326", "EPSG:3857"),
+                    map: map
+                });
+                return marker;
+            }
+        });
+    </script>
+</body>
+
+</html>
