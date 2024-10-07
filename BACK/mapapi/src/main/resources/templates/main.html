@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Route Finder</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script
+            src="https://apis.openapi.sk.com/tmap/js?version=1.0&format=javascript&appKey=EHDhTt6iqk7HwqS2AirSY71g65xVG8Rp3LtZaIIx"></script>
+    <style>
+        .poi-list {
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            display: none;
+            /* 초기에는 숨김 */
+        }
+
+        .poi-item {
+            padding: 8px;
+            cursor: pointer;
+        }
+
+        .poi-item:hover {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+
+<body>
+<h1>Route Finder</h1>
+
+<div class="search-container">
+    <input type="text" id="startLocation" placeholder="출발지 검색">
+    <button id="startSearch">검색</button>
+    <div id="startPoiList" class="poi-list"></div>
+</div>
+
+<div class="search-container">
+    <input type="text" id="endLocation" placeholder="목적지 검색">
+    <button id="endSearch">검색</button>
+    <div id="endPoiList" class="poi-list"></div>
+</div>
+
+<div id="map_div" style="width: 100%; height: 500px;"></div>
+
+<button id="findRoute">경로 찾기</button>
+
+<script>
+    let startCoordinates = null;
+    let endCoordinates = null;
+    let map;
+    let startMarker = null;
+    let endMarker = null;
+
+    $(document).ready(function () {
+        // 지도 초기화
+        function initializeMap() {
+            map = new Tmap.Map({
+                div: 'map_div',
+                width: '100%',
+                height: '500px',
+            });
+            map.setCenter(new Tmap.LonLat(126.9783882, 37.5666103).transform("EPSG:4326", "EPSG:3857"), 15);
+        }
+
+        initializeMap();
+
+        // POI 검색 - 출발지
+        $("#startSearch").click(function () {
+            const keyword = $("#startLocation").val();
+            if (!keyword) return;
+
+            // 출발지 검색 API 호출
+            $.post("/startSearch", keyword, function (poi) {
+                startCoordinates = { lat: poi.frontLat, lon: poi.frontLon };
+
+                // 지도에 마커 추가
+                if (startMarker) {
+                    map.removeLayer(startMarker);
+                }
+                startMarker = addMarker(startCoordinates.lat, startCoordinates.lon);
+
+                // 입력 필드에 선택한 장소 표시
+                $("#startLocation").val(poi.name);
+                $("#startPoiList").empty(); // 검색 결과 초기화
+            });
+        });
+
+        // POI 검색 - 목적지
+        $("#endSearch").click(function () {
+            const keyword = $("#endLocation").val();
+            if (!keyword) return;
+
+            // 목적지 검색 API 호출
+            $.post("/endSearch", keyword, function (poi) {
+                endCoordinates = { lat: poi.frontLat, lon: poi.frontLon };
+
+                // 지도에 마커 추가
+                if (endMarker) {
+                    map.removeLayer(endMarker);
+                }
+                endMarker = addMarker(endCoordinates.lat, endCoordinates.lon);
+
+                // 입력 필드에 선택한 장소 표시
+                $("#endLocation").val(poi.name);
+                $("#endPoiList").empty(); // 검색 결과 초기화
+            });
+        });
+
+        // 경로 찾기 버튼 클릭
+        $("#findRoute").click(function () {
+            if (startCoordinates && endCoordinates) {
+                $.post("/api/route", JSON.stringify({
+                    startX: startCoordinates.lon,
+                    startY: startCoordinates.lat,
+                    endX: endCoordinates.lon,
+                    endY: endCoordinates.lat
+                }), function (routeData) {
+                    drawRoute(routeData);
+                });
+            } else {
+                alert("출발지와 목적지를 선택해주세요.");
+            }
+        });
+
+        // 마커 추가 함수
+        function addMarker(lat, lon) {
+            const marker = new Tmap.Marker({
+                position: new Tmap.LonLat(lon, lat).transform("EPSG:4326", "EPSG:3857"),
+                map: map
+            });
+            return marker;
+        }
+    });
+</script>
+</body>
+
+</html>
