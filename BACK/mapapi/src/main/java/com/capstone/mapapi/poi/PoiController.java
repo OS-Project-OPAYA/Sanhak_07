@@ -1,9 +1,7 @@
 package com.capstone.mapapi.poi;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 public class PoiController {
@@ -11,9 +9,14 @@ public class PoiController {
     @Autowired
     private PoiService poiService;
 
-    @GetMapping("/api/pois")
-    public Poi search(@RequestParam String keyword) {
-        System.out.println("Received search request for keyword: " + keyword);  // 검색어 로그 출력
-        return poiService.searchFirstPoi(keyword);  // 첫 번째 장소만 반환
+    @PostMapping("/startSearch")
+    public Poi searchStartPoi(@RequestBody String keyword) {
+        return poiService.searchFirstPoi(keyword, true); // 출발지 검색 시 isStart=true
     }
+
+    @PostMapping("/endSearch")
+    public Poi searchEndPoi(@RequestBody String keyword) {
+        return poiService.searchFirstPoi(keyword, false); // 목적지 검색 시 isStart=false
+    }
+
 }

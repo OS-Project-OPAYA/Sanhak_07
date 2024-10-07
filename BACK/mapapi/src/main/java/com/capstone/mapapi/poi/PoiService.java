@@ -10,18 +10,24 @@ import org.springframework.stereotype.Service;
 
 import com.capstone.mapapi.start.Start; // Start 엔티티 임포트
 import com.capstone.mapapi.start.StartService; // StartService 임포트
+import com.capstone.mapapi.destination.Destination; // Destination 엔티티 임포트
+import com.capstone.mapapi.destination.DestinationService; // DestinationService 임포트
 
 @Service
 public class PoiService {
 
     private final OkHttpClient client = new OkHttpClient();
     private final ObjectMapper objectMapper = new ObjectMapper();
-    
-    // StartService 주입
+
+    // StartService와 DestinationService 주입
     @Autowired
     private StartService startService;
 
-    public Poi searchFirstPoi(String keyword) {
+    @Autowired
+    private DestinationService destinationService;
+
+    // TMap API로 장소 검색 및 저장
+    public Poi searchFirstPoi(String keyword, boolean isStart) {
         Poi selectedPoi = null;
 
         // TMap API 호출 URL 구성
@@ -53,9 +59,14 @@ public class PoiService {
                     System.out.println("Selected first POI: " + selectedPoi.getName() + " " + selectedPoi.getFrontLat()
                             + " " + selectedPoi.getFrontLon()); // 선택된 장소 로그
 
-                    // Start 엔티티 생성 및 저장
-                    Start start = new Start(selectedPoi.getFrontLat(), selectedPoi.getFrontLon());
-                    startService.saveStart(start); // StartService를 통해 저장
+                    // 출발지이면 Start 테이블에 저장, 목적지이면 Destination 테이블에 저장
+                    if (isStart) {
+                        Start start = new Start(selectedPoi.getName(), selectedPoi.getFrontLat(), selectedPoi.getFrontLon());
+                        startService.saveStart(start); // StartService를 통해 저장
+                    } else {
+                        Destination destination = new Destination(selectedPoi.getName(), selectedPoi.getFrontLat(), selectedPoi.getFrontLon());
+                        destinationService.saveDestination(destination); // DestinationService를 통해 저장
+                    }
                 } else {
                     System.out.println("No POIs found.");
                 }
